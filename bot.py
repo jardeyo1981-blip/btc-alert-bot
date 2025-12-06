@@ -35,6 +35,7 @@ def spot() -> float:
     except Exception:
         # Fallback to recent history if fast_info is missing
         try:
+            ticker = yf.Ticker(TICKER)
             hist = ticker.history(period="1d", interval="1m")
             if not hist.empty:
                 return float(hist["Close"].iloc[-1])
