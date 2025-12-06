@@ -11,8 +11,14 @@ import pandas_ta as ta
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import yfinance as yf
+import sys
+import traceback
 
-WEBHOOK = os.environ["DISCORD_WEBHOOK"]
+WEBHOOK = os.environ.get("DISCORD_WEBHOOK")
+if not WEBHOOK:
+    print("ERROR: DISCORD_WEBHOOK environment variable is not set. Exiting.", file=sys.stderr)
+    sys.exit(1)
+
 PING_TAG = f"<@{os.environ.get('DISCORD_USER_ID', '')}>"
 PING_ALERTS = os.environ.get("PING_ALERTS", "true").lower() == "true"
 
@@ -22,54 +28,119 @@ last_alert = 0
 alert_count = 0
 tz_utc = ZoneInfo("UTC")
 
+
 def spot() -> float:
-    try: return float(yf.Ticker(TICKER).fast_info["lastPrice"])
-    except: return 0.0
+    try:
+        fi = yf.Ticker(TICKER).fast_info
+        return float(fi.get("lastPrice", 0.0)) if fi else 0.0
+    except Exception:
+        # fallback: attempt to get the last close using history
+        try:
+            hist = yf.download(TICKER, period="1d", interval="1m", progress=False, threads=False)
+            if not hist.empty:
+                return float(hist["Close"].iloc[-1])
+        except Exception:
+            pass
+        return 0.0
+
 
 def safe_scalar(series_or_value):
-    """PERMANENT FIX — Turns ANY Series into a scalar, or 0 if invalid"""
-    if pd.isna(series_or_value):
+    """PERMANENT FIX — Turns ANY Series into a scalar, or 0 if invalid.
+    If a Series is passed, return its last element. If a scalar NaN or None,
+    return 0.0.
+    """
+    # Handle pandas Series/DataFrame first
+    if isinstance(series_or_value, (pd.Series, pd.DataFrame)):
+        try:
+            # If DataFrame, take last value of the first column
+            if isinstance(series_or_value, pd.DataFrame):
+                if series_or_value.shape[0] == 0 or series_or_value.shape[1] == 0:
+                    return 0.0
+                val = series_or_value.iloc[-1, 0]
+            else:
+                if len(series_or_value) == 0:
+                    return 0.0
+                val = series_or_value.iloc[-1]
+            if pd.isna(val):
+                return 0.0
+            return float(val)
+        except Exception:
+            return 0.0
+
+    # Non-series: handle NaN / None
+    try:
+        if series_or_value is None:
+            return 0.0
+        if pd.isna(series_or_value):
+            return 0.0
+        return float(series_or_value)
+    except Exception:
         return 0.0
-    if isinstance(series_or_value, pd.Series):
-        return float(series_or_value.item()) if len(series_or_value) > 0 else 0.0
-    return float(series_or_value)
+
 
 def send(title: str, desc: str, color: int):
     global alert_count
     alert_count += 1
-    requests.post(WEBHOOK, json={
-        "content": PING_TAG if PING_ALERTS and os.environ.get("DISCORD_USER_ID") else None,
-        "embeds": [{"title": title, "description": desc, "color": color,
-                    "footer": {"text": datetime.now(tz_utc).strftime("%b %d %H:%M UTC")}}]
-    })
+
+    payload = {
+        "embeds": [
+            {
+                "title": title,
+                "description": desc,
+                "color": color,
+                "footer": {"text": datetime.now(tz_utc).strftime("%b %d %H:%M UTC")},
+            }
+        ]
+    }
+    if PING_ALERTS and os.environ.get("DISCORD_USER_ID"):
+        payload["content"] = PING_TAG
+
+    try:
+        resp = requests.post(WEBHOOK, json=payload, timeout=15)
+        if resp.status_code >= 400:
+            # Log failure (Discord returns useful error messages)
+            print(f"Failed to send webhook (status {resp.status_code}): {resp.text}", file=sys.stderr)
+    except Exception as e:
+        print(f"Exception while sending webhook: {e}", file=sys.stderr)
+
 
 def get_data(tf: str):
     period = "60d" if tf == "4h" else "10d"
     try:
         df = yf.download(TICKER, period=period, interval=tf, progress=False, threads=False)
-        if len(df) < 60: return None
-        df["ema5"]  = ta.ema(df["Close"], length=5)
+        if df is None or len(df) < 60:
+            return None
+        df["ema5"] = ta.ema(df["Close"], length=5)
         df["ema12"] = ta.ema(df["Close"], length=12)
         df["ema34"] = ta.ema(df["Close"], length=34)
         df["ema50"] = ta.ema(df["Close"], length=50)
-        df["atr"]   = ta.atr(df["High"], df["Low"], df["Close"], length=14)
+        df["atr"] = ta.atr(df["High"], df["Low"], df["Close"], length=14)
         df = df.dropna()
-        if len(df) < 2: return None
+        if len(df) < 2:
+            return None
         return df
-    except: return None
+    except Exception:
+        return None
+
 
 print("BTC 4H + 15M PRO BOT — ANTI-SERIES IMMORTAL — LIVE FOREVER")
 while True:
     try:
         now = time.time()
-        if now - last_alert < COOLDOWN: time.sleep(300); continue
+        if now - last_alert < COOLDOWN:
+            time.sleep(300)
+            continue
 
         s = spot()
-        if s <= 0: time.sleep(60); continue
+        if s <= 0:
+            time.sleep(60)
+            continue
 
         df_4h = get_data("4h")
         df_15m = get_data("15m")
-        if not df_4h or not df_15m: time.sleep(60); continue
+        if df_4h is None or df_15m is None:
+            time.sleep(60)
+            continue
 
         # SAFE 4h values — using safe_scalar to kill Series forever
         e5_4h = safe_scalar(df_4h["ema5"].iloc[-1])
@@ -121,7 +192,12 @@ while True:
             last_alert = now
 
     except Exception as e:
-        requests.post(WEBHOOK, json={"content": f"BOT CRASHED: {str(e)[:1900]}"})
+        # Send the error to the webhook (if available) and print traceback
+        err_text = "".join(traceback.format_exception_only(type(e), e))[:1900]
+        try:
+            requests.post(WEBHOOK, json={"content": f"BOT CRASHED: {err_text}"})
+        except Exception:
+            print(f"Failed to POST crash to webhook: {err_text}", file=sys.stderr)
         time.sleep(120)
 
     time.sleep(45)

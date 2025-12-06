@@ -1,6 +1,6 @@
-yfinance
-pandas
-requests
-pandas_ta
-pytz
-zoneinfo
+# pinned minimal versions recommended for reproducibility
+yfinance==0.2.26
+pandas==2.2.3
+requests==2.31.0
+pandas-ta==0.3.14b0
+pytz==2024.4
