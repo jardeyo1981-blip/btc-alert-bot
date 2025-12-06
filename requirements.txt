@@ -1,0 +1,6 @@
+yfinance
+pandas
+requests
+pandas_ta
+pytz
+zoneinfo
