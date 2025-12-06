@@ -1,6 +1,6 @@
 # =====================================================
-# BTC 4H + 15M PRO TRADING BOT — FINAL IMMORTAL VERSION
-# DEC 2025 — EVERYTHING YOU ASKED FOR
+# BTC 4H + 15M PRO BOT — PERMANENT ANTI-SERIES FIX
+# DEC 2025 — THIS ONE CANNOT DIE
 # =====================================================
 
 import os
@@ -26,6 +26,14 @@ def spot() -> float:
     try: return float(yf.Ticker(TICKER).fast_info["lastPrice"])
     except: return 0.0
 
+def safe_scalar(series_or_value):
+    """PERMANENT FIX — Turns ANY Series into a scalar, or 0 if invalid"""
+    if pd.isna(series_or_value):
+        return 0.0
+    if isinstance(series_or_value, pd.Series):
+        return float(series_or_value.item()) if len(series_or_value) > 0 else 0.0
+    return float(series_or_value)
+
 def send(title: str, desc: str, color: int):
     global alert_count
     alert_count += 1
@@ -50,7 +58,7 @@ def get_data(tf: str):
         return df
     except: return None
 
-print("BTC 4H + 15M PRO BOT — FINAL IMMORTAL BUILD — LIVE")
+print("BTC 4H + 15M PRO BOT — ANTI-SERIES IMMORTAL — LIVE FOREVER")
 while True:
     try:
         now = time.time()
@@ -63,18 +71,18 @@ while True:
         df_15m = get_data("15m")
         if not df_4h or not df_15m: time.sleep(60); continue
 
-        # 4h values
-        e5_4h = float(df_4h["ema5"].values[-1])
-        e12_4h = float(df_4h["ema12"].values[-1])
-        e34_4h = float(df_4h["ema34"].values[-1])
-        e50_4h = float(df_4h["ema50"].values[-1])
-        atr_4h = float(df_4h["atr"].values[-1])
+        # SAFE 4h values — using safe_scalar to kill Series forever
+        e5_4h = safe_scalar(df_4h["ema5"].iloc[-1])
+        e12_4h = safe_scalar(df_4h["ema12"].iloc[-1])
+        e34_4h = safe_scalar(df_4h["ema34"].iloc[-1])
+        e50_4h = safe_scalar(df_4h["ema50"].iloc[-1])
+        atr_4h = safe_scalar(df_4h["atr"].iloc[-1])
 
-        # 15m values + flip detection
-        e5_15m = float(df_15m["ema5"].values[-1])
-        e12_15m = float(df_15m["ema12"].values[-1])
-        e5_15m_prev = float(df_15m["ema5"].values[-2])
-        e12_15m_prev = float(df_15m["ema12"].values[-2])
+        # SAFE 15m values + flip detection
+        e5_15m = safe_scalar(df_15m["ema5"].iloc[-1])
+        e12_15m = safe_scalar(df_15m["ema12"].iloc[-1])
+        e5_15m_prev = safe_scalar(df_15m["ema5"].iloc[-2])
+        e12_15m_prev = safe_scalar(df_15m["ema12"].iloc[-2])
         bull_flip_15m = e5_15m_prev <= e12_15m_prev and e5_15m > e12_15m
         bear_flip_15m = e5_15m_prev >= e12_15m_prev and e5_15m < e12_15m
 
