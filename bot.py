@@ -24,6 +24,7 @@ PING_ALERTS = os.environ.get("PING_ALERTS", "true").lower() == "true"
 
 TICKER = "BTC-USD"
 COOLDOWN = 1800
+MAX_ERROR_MSG_LENGTH = 1900
 last_alert = 0
 alert_count = 0
 tz_utc = ZoneInfo("UTC")
@@ -193,7 +194,7 @@ while True:
 
     except Exception as e:
         # Send the error to the webhook (if available) and print traceback
-        err_text = "".join(traceback.format_exception_only(type(e), e))[:1900]
+        err_text = "".join(traceback.format_exception_only(type(e), e))[:MAX_ERROR_MSG_LENGTH]
         try:
             requests.post(WEBHOOK, json={"content": f"BOT CRASHED: {err_text}"})
         except Exception:
