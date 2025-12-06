@@ -4,6 +4,7 @@
 # =====================================================
 
 import os
+import sys
 import time
 import requests
 import pandas as pd
@@ -11,6 +12,10 @@ import pandas_ta as ta
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import yfinance as yf
+
+# Fail fast if DISCORD_WEBHOOK is not set
+if "DISCORD_WEBHOOK" not in os.environ:
+    sys.exit("ERROR: DISCORD_WEBHOOK environment variable is not set")
 
 WEBHOOK = os.environ["DISCORD_WEBHOOK"]
 PING_TAG = f"<@{os.environ.get('DISCORD_USER_ID', '')}>"
@@ -23,25 +28,54 @@ alert_count = 0
 tz_utc = ZoneInfo("UTC")
 
 def spot() -> float:
-    try: return float(yf.Ticker(TICKER).fast_info["lastPrice"])
-    except: return 0.0
+    """Get current BTC spot price with fallback to history if fast_info fails"""
+    try:
+        ticker = yf.Ticker(TICKER)
+        return float(ticker.fast_info["lastPrice"])
+    except Exception:
+        # Fallback to recent history if fast_info is missing
+        try:
+            hist = ticker.history(period="1d", interval="1m")
+            if not hist.empty:
+                return float(hist["Close"].iloc[-1])
+        except Exception:
+            pass
+        return 0.0
 
 def safe_scalar(series_or_value):
-    """PERMANENT FIX — Turns ANY Series into a scalar, or 0 if invalid"""
+    """PERMANENT FIX — Turns ANY Series/DataFrame into a scalar, or 0 if invalid"""
+    # Handle Series/DataFrame first before checking for NaN
+    if isinstance(series_or_value, (pd.Series, pd.DataFrame)):
+        if len(series_or_value) == 0:
+            return 0.0
+        # Get last element from Series or DataFrame
+        val = series_or_value.iloc[-1] if isinstance(series_or_value, pd.Series) else series_or_value.iloc[-1, -1]
+        return float(val) if not pd.isna(val) else 0.0
+    # Handle scalar values
     if pd.isna(series_or_value):
         return 0.0
-    if isinstance(series_or_value, pd.Series):
-        return float(series_or_value.item()) if len(series_or_value) > 0 else 0.0
     return float(series_or_value)
 
 def send(title: str, desc: str, color: int):
     global alert_count
     alert_count += 1
-    requests.post(WEBHOOK, json={
-        "content": PING_TAG if PING_ALERTS and os.environ.get("DISCORD_USER_ID") else None,
+    
+    # Build payload - only include 'content' if pinging
+    payload = {
         "embeds": [{"title": title, "description": desc, "color": color,
                     "footer": {"text": datetime.now(tz_utc).strftime("%b %d %H:%M UTC")}}]
-    })
+    }
+    
+    # Add content only if pinging and user ID is set
+    if PING_ALERTS and os.environ.get("DISCORD_USER_ID"):
+        payload["content"] = PING_TAG
+    
+    # Send request and check response
+    try:
+        response = requests.post(WEBHOOK, json=payload, timeout=10)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"WARNING: Failed to send Discord webhook: {e}", flush=True)
 
 def get_data(tf: str):
     period = "60d" if tf == "4h" else "10d"
@@ -121,7 +155,12 @@ while True:
             last_alert = now
 
     except Exception as e:
-        requests.post(WEBHOOK, json={"content": f"BOT CRASHED: {str(e)[:1900]}"})
+        error_msg = f"BOT CRASHED: {str(e)[:1900]}"
+        print(error_msg, flush=True)
+        try:
+            requests.post(WEBHOOK, json={"content": error_msg}, timeout=10)
+        except Exception:
+            pass  # Don't crash if webhook fails
         time.sleep(120)
 
     time.sleep(45)
