@@ -34,9 +34,9 @@ def spot() -> float:
         fi = yf.Ticker(TICKER).fast_info
         return float(fi.get("lastPrice", 0.0)) if fi else 0.0
     except Exception:
-        # fallback: attempt to get the last close using history
+        # fallback: attempt to get the last close using recent history
         try:
-            hist = yf.download(TICKER, period="1d", interval="1m", progress=False, threads=False)
+            hist = yf.download(TICKER, period="1h", interval="1m", progress=False, threads=False)
             if not hist.empty:
                 return float(hist["Close"].iloc[-1])
         except Exception:
