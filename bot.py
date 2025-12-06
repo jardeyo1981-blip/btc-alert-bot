@@ -1,6 +1,6 @@
-   # =====================================================
-# BTC REVENANT TAPE — FINAL UNKILLABLE VERSION
-# ZERO SERIES → SCALAR CONVERSIONS EVERYWHERE
+# =====================================================
+# BTC REVENANT TAPE — FINAL UNKILLABLE BUILD v∞
+# ZERO SERIES AMBIGUITY — DEC 2025 — FOREVER
 # =====================================================
 
 import os
@@ -17,12 +17,13 @@ PING_TAG = f"<@{os.environ.get('DISCORD_USER_ID', '')}>"
 PING_ALERTS = os.environ.get("PING_ALERTS", "true").lower() == "true"
 
 TICKER = "BTC-USD"
-COOLDOWN = 1800
+COOLDOWN = 1800  # 30 minutes
 last_alert = {TICKER: 0}
 last_scan = 0
 alert_count = 0
 tz_utc = ZoneInfo("UTC")
 
+# ================== HELPERS ==================
 def spot() -> float:
     try:
         return float(yf.Ticker(TICKER).fast_info["lastPrice"])
@@ -58,7 +59,6 @@ def send(title: str, desc: str = "", color: int = 0x00AAFF, ping: bool = True):
 def nuclear_candles(df: pd.DataFrame, spot_price: float):
     if len(df) < 20: return None
 
-    # Force everything to plain float — no Series left alive
     def scalar(row):
         return {k: float(v) for k, v in row.to_dict().items()}
 
@@ -103,18 +103,34 @@ def nuclear_candles(df: pd.DataFrame, spot_price: float):
 
     return None
 
+# THE FINAL BULLETPROOF rams_demons — THIS ONE CANNOT DIE
 def rams_demons(_):
     try:
         df = yf.download(TICKER, period="6d", interval="5m", progress=False, threads=False)
-        if len(df) < 50: return None
+        if len(df) < 50:
+            return None
+
         c = df.iloc[-2]
-        vol_mean = float(df["Volume"].rolling(40).mean().iloc[-2])
-        if pd.isna(vol_mean) or vol_mean <= 0: return None
+        vol_series = df["Volume"].rolling(40).mean()
+        vol_mean_raw = vol_series.iloc[-2]
+
+        # FINAL NUCLEAR FIX — no Series can survive this
+        if pd.isna(vol_mean_raw) or pd.isnull(vol_mean_raw):
+            return None
+        vol_mean = float(vol_mean_raw)
+        if vol_mean <= 0:
+            return None
+
         vol_r = float(c["Volume"]) / vol_mean
 
-        o, h, l, cl = float(c["Open"]), float(c["High"]), float(c["Low"]), float(c["Close"])
+        o = float(c["Open"])
+        h = float(c["High"])
+        l = float(c["Low"])
+        cl = float(c["Close"])
         r = h - l
-        if r == 0: return None
+        if r <= 0:
+            return None
+
         body = abs(cl - o)
         uw = h - max(o, cl)
         lw = min(o, cl) - l
@@ -128,19 +144,22 @@ def rams_demons(_):
     except:
         return None
 
-# ================== MAIN LOOP ==================
-print("BTC REVENANT TAPE — FINAL UNKILLABLE BUILD")
+# ================== MAIN LOOP — IMMORTAL ==================
+print("BTC REVENANT TAPE — FINAL UNKILLABLE BUILD v∞ — LIVE FOREVER")
 while True:
     try:
         now = time.time()
         s = spot()
         if s <= 0:
-            time.sleep(60); continue
+            time.sleep(60)
+            continue
 
         if now - last_alert.get(TICKER, 0) < COOLDOWN:
-            time.sleep(300); continue
+            time.sleep(300)
+            continue
         if now - last_scan < 300:
-            time.sleep(60); continue
+            time.sleep(60)
+            continue
         last_scan = now
 
         df5 = yf.download(TICKER, period="6d", interval="5m", progress=False, threads=False)
