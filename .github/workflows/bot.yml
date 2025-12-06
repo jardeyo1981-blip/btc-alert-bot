@@ -1,7 +1,7 @@
 name: BTC Alert Bot
 on:
   schedule:
-    - cron: '*/5 * * * *'  # Every 5 minutes; adjust as needed (e.g., '*/15 * * * *' for 15 min)
+    - cron: '*/4 * * * *'  # Every 5 minutes; adjust as needed (e.g., '*/15 * * * *' for 15 min)
   workflow_dispatch:  # Allows manual runs from GitHub UI
 
 jobs:
