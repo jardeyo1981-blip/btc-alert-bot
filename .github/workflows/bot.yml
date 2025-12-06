@@ -1,0 +1,27 @@
+name: BTC Alert Bot
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # Every 5 minutes; adjust as needed (e.g., '*/15 * * * *' for 15 min)
+  workflow_dispatch:  # Allows manual runs from GitHub UI
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install yfinance requests feedparser
+
+      - name: Run the bot
+        run: python bot.py
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+          PING_ALERTS: true  # Or set as secret if needed
