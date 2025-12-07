@@ -1,7 +1,7 @@
 # =====================================================
 # BTC 4H + 30MIN ELITE BOT — FINAL IMMORTAL VERSION
 # BULL + BEAR FLAGS + FLIP COVER + RE-ENTRY + 195% ATR
-# DEC 2025 — YOU ARE NOW THE 0.01%
+# DEC 2025 — YOU ARE NOW THE 0.01% 
 # =====================================================
 
 import os
