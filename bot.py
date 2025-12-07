@@ -1,123 +1,104 @@
-# =====================================================
-# BTC 4H + 30MIN ELITE BOT — FINAL IMMORTAL VERSION
-# BULL + BEAR FLAGS + FLIP COVER + RE-ENTRY + 195% ATR
-# DEC 2025 — YOU ARE NOW THE 0.01%  
-# =====================================================
+# =============================================
+# BTC 30MIN ELITE PUMP/DUMP BOT — DEC 2025 FINAL
+# EMA5/12 Crossover + ADX > 23 (zero chop, only real moves)
+# You are now the 0.01%
+# =============================================
 
 import os
 import time
-import requests
+import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
+import requests
 from datetime import datetime
-from zoneinfo import ZoneInfo
-import yfinance as yf
 
-WEBHOOK = os.environ["DISCORD_WEBHOOK"]
-PING_TAG = f"<@{os.environ.get('DISCORD_USER_ID', '')}>"
-PING_ALERTS = os.environ.get("PING_ALERTS", "true").lower() == "true"
-
+# === CONFIG ===
+WEBHOOK = os.environ["DISCORD_WEBHOOK"]        # Set in your environment
+COOLDOWN_SECONDS = 3600                         # 1 hour cooldown after any signal
 TICKER = "BTC-USD"
-COOLDOWN = 1800
-last_alert = 0
-alert_count = 0
-pst = ZoneInfo("America/Los_Angeles")
+TIMEFRAME = "30m"
 
-def spot() -> float:
-    try: return float(yf.Ticker(TICKER).fast_info["lastPrice"])
-    except: return 0.0
-
-def send(title: str, desc: str, color: int):
-    global alert_count
-    alert_count += 1
-    footer = datetime.now(pst).strftime("%b %d %I:%M %p PST")
-    requests.post(WEBHOOK, json={
-        "content": PING_TAG if PING_ALERTS and os.environ.get("DISCORD_USER_ID") else None,
-        "embeds": [{"title": title, "description": desc, "color": color,
-                    "footer": {"text": footer}}]
-    })
-
-def get_data(tf: str):
-    period = "60d" if tf == "4h" else "14d"
+# === DISCORD ALERT FUNCTION ===
+def send_alert(title: str, desc: str, color: int):
+    payload = {
+        "username": "BTC ELITE BOT",
+        "embeds": [{
+            "title": title,
+            "description": desc,
+            "color": color,
+            "timestamp": datetime.utcnow().isoformat(),
+            "footer": {"text": "30min • EMA5/12 + ADX>23 • Dec 2025 Immortal Edition"}
+        }]
+    }
     try:
-        df = yf.download(TICKER, period=period, interval=tf, progress=False, threads=False)
-        if len(df) < 60: return None
-        df["ema5"]  = ta.ema(df["Close"], length=5)
-        df["ema12"] = ta.ema(df["Close"], length=12)
-        df["ema34"] = ta.ema(df["Close"], length=34)
-        df["ema50"] = ta.ema(df["Close"], length=50)
-        df["atr"]   = ta.atr(df["High"], df["Low"], df["Close"], length=14)
-        df = df.dropna()
-        return df if len(df) >= 2 else None
-    except: return None
+        requests.post(WEBHOOK, json=payload)
+    except:
+        pass
 
-print("BTC 4H + 30MIN ELITE BOT — FINAL VERSION — LIVE FOREVER")
+# === MAIN LOOP ===
+last_signal_time = 0
+
+print("BTC 30MIN ELITE BOT STARTED — IMMORTAL MODE ENGAGED")
+
 while True:
     try:
         now = time.time()
-        if now - last_alert < COOLDOWN: time.sleep(300); continue
+        if now - last_signal_time < COOLDOWN_SECONDS:
+            time.sleep(60)
+            continue
 
-        s = spot()
-        if s <= 0: time.sleep(60); continue
+        # Download latest 30min data
+        df = yf.download(TICKER, period="30d", interval=TIMEFRAME, progress=False)
+        if len(df) < 50:
+            time.sleep(60)
+            continue
 
-        df_4h = get_data("4h")
-        df_30m = get_data("30m")
-        if not df_4h or not df_30m: time.sleep(60); continue
+        # Indicators
+        df["ema5"]  = ta.ema(df["Close"], length=5)
+        df["ema12"] = ta.ema(df["Close"], length=12)
+        df["atr"]   = ta.atr(df["High"], df["Low"], df["Close"], length=14)
+        adx_data    = ta.adx(df["High"], df["Low"], df["Close"], length=14)
+        df["adx"]   = adx_data["ADX_14"]
 
-        # 4h values
-        e5_4h = df_4h["ema5"].iloc[-1]
-        e12_4h = df_4h["ema12"].iloc[-1]
-        e34_4h = df_4h["ema34"].iloc[-1]
-        e50_4h = df_4h["ema50"].iloc[-1]
-        atr_4h = df_4h["atr"].iloc[-1]
-        high_4h = df_4h["High"].values
-        low_4h = df_4h["Low"].values
+        df = df.dropna()
 
-        # 30min values + flip detection
-        e5_30m = df_30m["ema5"].iloc[-1]
-        e12_30m = df_30m["ema12"].iloc[-1]
-        e5_prev = df_30m["ema5"].iloc[-2]
-        e12_prev = df_30m["ema12"].iloc[-2]
-        bull_flip = e5_prev <= e12_prev and e5_30m > e12_30m
-        bear_flip = e5_prev >= e12_prev and e5_30m < e12_30m
+        if len(df) < 2:
+            time.sleep(60)
+            continue
 
-        bullish_4h = e5_4h > e12_4h and e34_4h > e50_4h
-        bearish_4h = e5_4h < e12_4h and e34_4h < e50_4h
+        # Current & previous values
+        price     = df["Close"].iloc[-1]
+        ema5      = df["ema5"].iloc[-1]
+        ema12     = df["ema12"].iloc[-1]
+        ema5_prev = df["ema5"].iloc[-2]
+        ema12_prev= df["ema12"].iloc[-2]
+        adx       = df["adx"].iloc[-1]
+        atr       = df["atr"].iloc[-1]
 
-        # === BULL/BEAR FLAG DETECTION ===
-        is_bull_flag = (low_4h[-1] > low_4h[-5] and high_4h[-1] < high_4h[-5] and bullish_4h)
-        is_bear_flag = (high_4h[-1] < high_4h[-5] and low_4h[-1] > low_4h[-5] and bearish_4h)
+        # === SIGNAL CONDITIONS ===
+        long_signal  = (ema5_prev <= ema12_prev and ema5 > ema12 and 
+                        adx > 23 and price > ema5)
+        
+        short_signal = (ema5_prev >= ema12_prev and ema5 < ema12 and 
+                        adx > 23 and price < ema5)
 
-        # === BULL FLAG BREAK + RE-ENTRY ===
-        if is_bull_flag and s > high_4h[-1]:
-            target = s + (atr_4h * 1.95)
-            desc = f"**BULL FLAG BREAK — 4H + 30M**\nPrice: ${s:,.0f}\nTarget: ${target:,.0f} (+195% ATR)\nEst. 14–15h"
-            send("BULL FLAG BREAK — ENTER LONG", desc, 0x00FF00)
-            last_alert = now
+        # === FIRE ===
+        if long_signal:
+            target = price + (atr * 1.8)
+            tp_str = f"Target: ${target:,.0f} (+1.8× ATR)"
+            desc = f"**LONG PUMP CONFIRMED**\nPrice: ${price:,.0f}\n{tp_str}\nADX: {adx:.1f}"
+            send_alert("BTC 30MIN LONG — ENTER NOW", desc, 0x00FF00)
+            last_signal_time = now
 
-        if bullish_4h and bear_flip:
-            send("LONG TAKE PROFIT — 30M BEAR FLIP", "Lock gains — fade starting", 0xFF0000)
-            last_alert = now
-        if bullish_4h and bull_flip:
-            send("RE-LONG — BULL FLAG RESUMING", "Trend back on — add position", 0x00FF00)
-            last_alert = now
+        elif short_signal:
+            target = price - (atr * 1.8)
+            tp_str = f"Target: ${target:,.0f} (-1.8× ATR)"
+            desc = f"**SHORT DUMP CONFIRMED**\nPrice: ${price:,.0f}\n{tp_str}\nADX: {adx:.1f}"
+            send_alert("BTC 30MIN SHORT — ENTER NOW", desc, 0xFF0000)
+            last_signal_time = now
 
-        # === BEAR FLAG BREAK + RE-ENTRY ===
-        if is_bear_flag and s < low_4h[-1]:
-            target = s - (atr_4h * 1.95)
-            desc = f"**BEAR FLAG BREAK — 4H + 30M**\nPrice: ${s:,.0f}\nTarget: ${target:,.0f} (-195% ATR)\nEst. 14–15h"
-            send("BEAR FLAG BREAK — ENTER SHORT", desc, 0xFF0000)
-            last_alert = now
-
-        if bearish_4h and bull_flip:
-            send("SHORT COVER — 30M BULL FLIP", "Take profits — bounce starting", 0x00FF00)
-            last_alert = now
-        if bearish_4h and bear_flip:
-            send("RE-SHORT — BEAR FLAG RESUMING", "Trend back on — re-enter", 0xFF0000)
-            last_alert = now
+        time.sleep(60)
 
     except Exception as e:
-        requests.post(WEBHOOK, json={"content": f"BOT CRASHED: {str(e)[:1900]}"})
-        time.sleep(120)
-
-    time.sleep(60)
+        requests.post(WEBHOOK, json={"content": f"BOT ERROR: {str(e)}"})
+        time.sleep(300)
