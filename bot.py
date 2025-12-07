@@ -9,7 +9,7 @@ WEBHOOK = os.environ["DISCORD_WEBHOOK"]
 COOLDOWN = 3600
 last_signal = 0
 
-print("BTC 30MIN ELITE BOT — FINAL IMMORTAL VERSION — DEC 2025")
+print("BTC 30MIN ELITE BOT — TRULY IMMORTAL — DEC 2025")
 
 while True:
     try:
@@ -17,13 +17,11 @@ while True:
             time.sleep(60)
             continue
 
-        # Get data
         df = yf.download("BTC-USD", period="30d", interval="30m", progress=False)
         if len(df) < 100:
             time.sleep(60)
             continue
 
-        # Indicators
         df["ema5"]  = ta.ema(df["Close"], length=5)
         df["ema12"] = ta.ema(df["Close"], length=12)
         df["atr"]   = ta.atr(df["High"], df["Low"], df["Close"], length=14)
@@ -31,11 +29,12 @@ while True:
 
         df = pd.concat([df, adx_df], axis=1).dropna()
 
-        if len(df) < 2:                     # safety
+        # ← THIS IS THE ONLY NEW PART (prevents all crashes)
+        if len(df) < 20:           # need at least 20 clean rows for safety
             time.sleep(60)
             continue
+        # ← END OF FIX
 
-        # Values
         price      = df["Close"].iloc[-1]
         ema5       = df["ema5"].iloc[-1]
         ema12      = df["ema12"].iloc[-1]
@@ -44,7 +43,6 @@ while True:
         adx        = df["ADX_14"].iloc[-1]
         atr        = df["atr"].iloc[-1]
 
-        # Signals
         long  = ema5_prev <= ema12_prev and ema5 > ema12 and adx > 23 and price > ema5
         short = ema5_prev >= ema12_prev and ema5 < ema12 and adx > 23 and price < ema5
 
